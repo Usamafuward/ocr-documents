@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+venv/
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Ignore the .env file (contains sensitive information)
+.env
+docker.env
+
+/icons.py
+.sesskey
