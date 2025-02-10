@@ -19,8 +19,81 @@ logger = logging.getLogger(__name__)
 app, rt = fast_app(
     pico=False,
     hdrs=(
-        ShadHead(tw_cdn=True, theme_handle=True),
+        ShadHead(tw_cdn=True, theme_handle=False),
         Style("""
+            :root {
+                --background: 240 10% 3.9%;
+                --foreground: 0 0% 98%;
+                --card: 240 10% 3.9%;
+                --card-foreground: 0 0% 98%;
+                --popover: 240 10% 3.9%;
+                --popover-foreground: 0 0% 98%;
+                --primary: 0 0% 98%;
+                --primary-foreground: 240 5.9% 10%;
+                --secondary: 240 3.7% 15.9%;
+                --secondary-foreground: 0 0% 98%;
+                --muted: 240 3.7% 15.9%;
+                --muted-foreground: 240 5% 64.9%;
+                --accent: 240 3.7% 15.9%;
+                --accent-foreground: 0 0% 98%;
+                --destructive: 0 62.8% 30.6%;
+                --destructive-foreground: 0 0% 98%;
+                --border: 240 3.7% 15.9%;
+                --input: 240 3.7% 15.9%;
+                --ring: 240 4.9% 83.9%;
+            }
+
+            /* Force dark theme */
+            [class="light"] {
+                --background: 240 10% 3.9%;
+                --foreground: 0 0% 98%;
+                --card: 240 10% 3.9%;
+                --card-foreground: 0 0% 98%;
+                --popover: 240 10% 3.9%;
+                --popover-foreground: 0 0% 98%;
+                --primary: 0 0% 98%;
+                --primary-foreground: 240 5.9% 10%;
+                --secondary: 240 3.7% 15.9%;
+                --secondary-foreground: 0 0% 98%;
+                --muted: 240 3.7% 15.9%;
+                --muted-foreground: 240 5% 64.9%;
+                --accent: 240 3.7% 15.9%;
+                --accent-foreground: 0 0% 98%;
+                --destructive: 0 62.8% 30.6%;
+                --destructive-foreground: 0 0% 98%;
+                --border: 240 3.7% 15.9%;
+                --input: 240 3.7% 15.9%;
+                --ring: 240 4.9% 83.9%;
+            }
+            
+            [class=""] {
+                --background: 240 10% 3.9%;
+                --foreground: 0 0% 98%;
+                --card: 240 10% 3.9%;
+                --card-foreground: 0 0% 98%;
+                --popover: 240 10% 3.9%;
+                --popover-foreground: 0 0% 98%;
+                --primary: 0 0% 98%;
+                --primary-foreground: 240 5.9% 10%;
+                --secondary: 240 3.7% 15.9%;
+                --secondary-foreground: 0 0% 98%;
+                --muted: 240 3.7% 15.9%;
+                --muted-foreground: 240 5% 64.9%;
+                --accent: 240 3.7% 15.9%;
+                --accent-foreground: 0 0% 98%;
+                --destructive: 0 62.8% 30.6%;
+                --destructive-foreground: 0 0% 98%;
+                --border: 240 3.7% 15.9%;
+                --input: 240 3.7% 15.9%;
+                --ring: 240 4.9% 83.9%;
+            }
+
+            /* Force dark theme styles */
+            body {
+                background-color: hsl(var(--background));
+                color: hsl(var(--foreground));
+            }
+            
             @keyframes float {
                 0% { transform: translateY(0px); }
                 50% { transform: translateY(-10px); }
@@ -84,19 +157,10 @@ app, rt = fast_app(
             .htmx-request .loading-btn { display: flex; }
             .loading-btn { display: none; }
             .processing-btn { display: flex; }
-            
-            // Add error handling for failed requests
-            document.addEventListener('htmx:responseError', function(evt) {
-                console.error('Response error:', evt.detail.error);
-                // You can add UI feedback here
-            });
-            
-            document.addEventListener('htmx:sendError', function(evt) {
-                console.error('Send error:', evt.detail.error);
-                // You can add UI feedback here
-            });
         """),
         Script("""
+            document.documentElement.setAttribute('class', 'dark');       
+               
             function copyToClipboard(text, tooltipId) {
                 navigator.clipboard.writeText(text).then(() => {
                     const tooltip = document.getElementById(tooltipId);

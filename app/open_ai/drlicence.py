@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 import json
 import base64
-from models.drlicence import LicenceInfo
+from app.models.drlicence import LicenceInfo
 
 load_dotenv()
 
