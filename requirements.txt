@@ -6,6 +6,12 @@ instructor
 pydantic
 python-dotenv
 uvicorn
+google-generativeai
+python-dotenv
+pillow
+pypdf2
+pdf2image
+pymupdf
 
 # numpy #1.26.4
 # paddlepaddle #2.6.2

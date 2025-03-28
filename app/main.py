@@ -7,6 +7,7 @@ from starlette.datastructures import UploadFile
 from app.gemini.crbook import process_gemini_cr_book
 from app.gemini.drlicence import process_gemini_licence
 from app.gemini.passport import process_gemini_passport
+from app.gemini.utility_bills import process_utility_bill
 
 # Set up logging
 logging.basicConfig(
@@ -180,8 +181,11 @@ app, rt = fast_app(
 uploaded_images = {
     "crbook": None,
     "licence": None,
-    "passport": None
+    "passport": None,
+    "electricity": None,
+    "water": None
 }
+
 
 # Add application lifecycle handlers
 @app.on_event("startup")
@@ -214,17 +218,23 @@ def get_upload_card(doc_type):
     icons = {
         "crbook": "car",
         "licence": "id-card", 
-        "passport": "book-text"
+        "passport": "book-text",
+        "electricity": "zap",
+        "water": "droplet"
     }
     titles = {
         "crbook": "CR Book",
         "licence": "Driving Licence", 
-        "passport": "Passport"
+        "passport": "Passport",
+        "electricity": "Electricity Bill",
+        "water": "Water Bill"
     }
     colors = {
         "crbook": "emerald",
         "licence": "blue",
-        "passport": "purple"
+        "passport": "purple",
+        "electricity": "yellow",
+        "water": "blue"
     }
     
     return Card(
@@ -240,7 +250,7 @@ def get_upload_card(doc_type):
                         Input(
                             type="file",
                             name=f"{doc_type}_image",
-                            accept="image/*",
+                            accept="image/*,application/pdf",
                             cls="hidden",
                             id=f"file-upload-{doc_type}",
                             hx_post=f"/upload-image/{doc_type}",
@@ -309,30 +319,56 @@ def get_document_display(doc_type, image_data=None, extracted_info=None, padding
     icons = {
         "crbook": "car",
         "licence": "id-card",
-        "passport": "book-text"
+        "passport": "book-text",
+        "electricity": "zap",
+        "water": "droplet"
     }
     titles = {
         "crbook": "CR Book",
         "licence": "Driving Licence",
-        "passport": "Passport"
+        "passport": "Passport",
+        "electricity": "Electricity Bill",
+        "water": "Water Bill"
     }
     colors = {
         "crbook": "green",
         "licence": "blue",
-        "passport": "purple"
+        "passport": "purple",
+        "electricity": "yellow",
+        "water": "blue"
     }
     placeholder = {
         "crbook": "https://placehold.co/600x400?text=Upload+CR+Book+Image",
         "licence": "https://placehold.co/600x400?text=Upload+Licence+Image",
-        "passport": "https://placehold.co/600x400?text=Upload+Passport+Image"
+        "passport": "https://placehold.co/600x400?text=Upload+Passport+Image",
+        "electricity": "https://placehold.co/600x400?text=Upload+Electricity%20Bill+Image",
+        "water": "https://placehold.co/600x400?text=Upload+Water%20Bill+Image"
     }
-    
+
+    # Detect if image_data contains PDF
+    is_pdf = False
+    if image_data:
+        try:
+            # Check first 8 base64 characters for PDF magic number
+            chunk = image_data[:8]
+            padding_needed = 4 - (len(chunk) % 4)
+            decoded = base64.b64decode(chunk + ('=' * padding_needed))
+            is_pdf = decoded.startswith(b'%PDF-')
+        except:
+            pass
+
     return Div(
         Div(
             H3(f"{titles[doc_type]} Image", cls="text-2xl font-semibold leading-none tracking-tight"),
-            P("Uploaded image for processing.", cls="text-gray-500 text-sm mb-6"),
+            P("Uploaded document for processing.", cls="text-gray-500 text-sm mb-6"),
             Div(
-                Img(
+                # Show PDF embed or image based on detection
+                Embed(
+                    src=f"data:application/pdf;base64,{image_data}",
+                    type="application/pdf",
+                    cls="w-full h-96 rounded-lg",
+                    title=f"{titles[doc_type]} Preview"
+                ) if is_pdf else Img(
                     src=f"data:image/jpeg;base64,{image_data}" if image_data else placeholder[doc_type],
                     alt=titles[doc_type],
                     cls="rounded-lg object-contain w-full h-auto"
@@ -354,7 +390,7 @@ def get_document_display(doc_type, image_data=None, extracted_info=None, padding
         ),
         Div(
             H3(f"{titles[doc_type]} Information", cls="text-2xl font-semibold leading-none tracking-tight"),
-            P(f"Extracted information from the uploaded image using {ocr_method.capitalize()} OCR.",
+            P(f"Extracted information from the uploaded document using {ocr_method.capitalize()} OCR.",
               cls="text-gray-500 text-sm mb-6"),
             Div(
                 *[
@@ -397,7 +433,7 @@ def get_document_display(doc_type, image_data=None, extracted_info=None, padding
                     )
                     for key, value in (extracted_info or {}).items()
                 ] if extracted_info else [
-                    P(f"Upload and process an image to see extracted information for {titles[doc_type]}.",
+                    P(f"Upload and process a document to see extracted information for {titles[doc_type]}.",
                       cls="text-gray-500")
                 ],
                 cls="space-y-4"
@@ -424,7 +460,15 @@ def get_tabs():
                 Div(Lucide("book-text", cls="w-4 h-4 mr-2"), "Passport", cls="flex items-center"),
                 value="passport",
             ),
-            cls="grid w-full grid-cols-3 bg-gray-100/50 rounded-lg gap-1"
+            TabsTrigger(
+                Div(Lucide("zap", cls="w-4 h-4 mr-2"), "Electricity", cls="flex items-center"),
+                value="electricity",
+            ),
+            TabsTrigger(
+                Div(Lucide("droplet", cls="w-4 h-4 mr-2"), "Water", cls="flex items-center"),
+                value="water",
+            ),
+            cls="grid w-full grid-cols-5 bg-gray-100/50 rounded-lg gap-1"
         ),
         TabsContent(
             get_upload_card("licence"),
@@ -444,7 +488,19 @@ def get_tabs():
             value="passport",
             cls="space-y-7 transition-all duration-500 ease-in-out"
         ),
-        default_value="licence",
+        TabsContent(
+            get_upload_card("electricity"),
+            get_document_display(doc_type="electricity"),
+            value="electricity",
+            cls="space-y-7 transition-all duration-500 ease-in-out"
+        ),
+        TabsContent(
+            get_upload_card("water"),
+            get_document_display(doc_type="water"),
+            value="water",
+            cls="space-y-7 transition-all duration-500 ease-in-out"
+        ),
+        default_value="electricity",
         cls="w-full max-w-7xl mx-auto space-y-7 my-8"
     )
 
@@ -522,11 +578,17 @@ async def process_ocr(req: Request, doc_type: str):
         if not uploaded_images[doc_type]:
             raise ValueError(f"No {doc_type} image uploaded")
         
-        result = process_gemini_cr_book(uploaded_images[doc_type]) if doc_type == "crbook" else (
-            process_gemini_licence(uploaded_images[doc_type]) if doc_type == "licence" else process_gemini_passport(uploaded_images[doc_type])
-        )
+        if doc_type in ["electricity", "water"]:
+            from app.gemini.utility_bills import process_utility_bill
+            result = process_utility_bill(uploaded_images[doc_type], doc_type)
+
+        else:
+            result = process_gemini_cr_book(uploaded_images[doc_type]) if doc_type == "crbook" else (
+                process_gemini_licence(uploaded_images[doc_type]) if doc_type == "licence" else process_gemini_passport(uploaded_images[doc_type])
+            )
              
         image_data = result['image_data']
+        print(image_data)
         extracted_info = result['extracted_info']
         
         print(extracted_info)
@@ -534,6 +596,10 @@ async def process_ocr(req: Request, doc_type: str):
         # Validate the extracted information based on document type
         if doc_type == "licence" and ("Licence Number" not in extracted_info or extracted_info["Licence Number"] == None or extracted_info["Nic Number"] == None):
             extracted_info = { "Error": "Upload valid Driving Licence image" }
+        elif doc_type in ["electricity", "water"]:
+            required_fields = ["Name", "Address", "Total Due"]
+            if not all(result['extracted_info'].get(field) for field in required_fields):
+                result['extracted_info'] = {"Error": f"Invalid {doc_type.replace('_', ' ')} image"}
         elif doc_type == "passport" and ("Passport Number" not in extracted_info or extracted_info["Passport Number"] == None or extracted_info["Nic Number"] == None):
             extracted_info = { "Error": "Upload valid Passport image" }
         elif doc_type == "crbook" and ("Registration Number" not in extracted_info or extracted_info["Registration Number"] == None):
@@ -597,3 +663,4 @@ if __name__ == "__main__":
     run_server()
 else:
     serve()
+
