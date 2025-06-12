@@ -13,7 +13,7 @@ load_dotenv()
 def setup_gemini(api_key: str):
     """Initialize Gemini with API key"""
     genai.configure(api_key=api_key)
-    return genai.GenerativeModel('gemini-1.5-flash')
+    return genai.GenerativeModel('gemini-2.0-flash')
 
 def extract_crbook_info(uploaded_image) -> CRBookInfo:
     """
