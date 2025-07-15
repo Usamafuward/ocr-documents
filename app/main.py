@@ -1,13 +1,18 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import base64
 import logging
 from fasthtml.common import *
 from shad4fast import *
+from fastapi import File, UploadFile
 from starlette.responses import FileResponse
 from starlette.datastructures import UploadFile
 from app.gemini.crbook import process_gemini_cr_book
 from app.gemini.drlicence import process_gemini_licence
 from app.gemini.passport import process_gemini_passport
 from app.gemini.utility_bills import process_utility_bill
+from app.gemini.invoice import process_gemini_vehicle_pdf
 
 # Set up logging
 logging.basicConfig(
@@ -43,8 +48,6 @@ app, rt = fast_app(
                 --input: 240 3.7% 15.9%;
                 --ring: 240 4.9% 83.9%;
             }
-
-            /* Force dark theme */
             [class="light"] {
                 --background: 240 10% 3.9%;
                 --foreground: 0 0% 98%;
@@ -66,7 +69,6 @@ app, rt = fast_app(
                 --input: 240 3.7% 15.9%;
                 --ring: 240 4.9% 83.9%;
             }
-            
             [class=""] {
                 --background: 240 10% 3.9%;
                 --foreground: 0 0% 98%;
@@ -88,50 +90,40 @@ app, rt = fast_app(
                 --input: 240 3.7% 15.9%;
                 --ring: 240 4.9% 83.9%;
             }
-
-            /* Force dark theme styles */
             body {
                 background-color: hsl(var(--background));
                 color: hsl(var(--foreground));
             }
-            
             @keyframes float {
                 0% { transform: translateY(0px); }
                 50% { transform: translateY(-10px); }
                 100% { transform: translateY(0px); }
             }
-            
             @keyframes pulse {
                 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
                 70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
                 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
             }
-            
             @keyframes fadeOut {
                 0% { opacity: 1; }
                 70% { opacity: 1; }
                 100% { opacity: 0; display: none; }
             }
-            
             .float { animation: float 3s ease-in-out infinite; }
             .pulse { animation: pulse 2s infinite; }
             .spinner { animation: spin 1s linear infinite; }
-            
             .glass {
                 background: rgba(255, 255, 255, 0.1);
                 backdrop-filter: blur(10px);
                 border: 1px solid rgba(255, 255, 255, 0.2);
             }
-            
             .hover-lift {
                 transition: transform 0.3s ease, box-shadow 0.3s ease;
             }
-            
             .hover-lift:hover {
                 transform: translateY(-3px);
                 box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
             }
-            
             .copy-tooltip { 
                 display: none;
                 position: absolute;
@@ -144,16 +136,13 @@ app, rt = fast_app(
                 top: -25px;
                 right: 0;
             }
-            
             .copy-btn:hover .copy-tooltip {
                 display: block;
             }
-            
             .copied {
                 display: block !important;
                 animation: fadeOut 1s forwards;
             }
-            
             .htmx-request .processing-btn { display: none; }
             .htmx-request .loading-btn { display: flex; }
             .loading-btn { display: none; }
@@ -161,7 +150,6 @@ app, rt = fast_app(
         """),
         Script("""
             document.documentElement.setAttribute('class', 'dark');       
-               
             function copyToClipboard(text, tooltipId) {
                 navigator.clipboard.writeText(text).then(() => {
                     const tooltip = document.getElementById(tooltipId);
@@ -183,7 +171,8 @@ uploaded_images = {
     "licence": None,
     "passport": None,
     "electricity": None,
-    "water": None
+    "water": None,
+    "invoice": None
 }
 
 
@@ -220,21 +209,24 @@ def get_upload_card(doc_type):
         "licence": "id-card", 
         "passport": "book-text",
         "electricity": "zap",
-        "water": "droplet"
+        "water": "droplet",
+        "invoice": "file-text"
     }
     titles = {
         "crbook": "CR Book",
         "licence": "Driving Licence", 
         "passport": "Passport",
         "electricity": "Electricity Bill",
-        "water": "Water Bill"
+        "water": "Water Bill",
+        "invoice": "Invoice"
     }
     colors = {
         "crbook": "emerald",
         "licence": "blue",
         "passport": "purple",
         "electricity": "yellow",
-        "water": "blue"
+        "water": "blue",
+        "invoice": "orange"
     }
     
     return Card(
@@ -321,28 +313,32 @@ def get_document_display(doc_type, image_data=None, extracted_info=None, padding
         "licence": "id-card",
         "passport": "book-text",
         "electricity": "zap",
-        "water": "droplet"
+        "water": "droplet",
+        "invoice": "file-text"
     }
     titles = {
         "crbook": "CR Book",
         "licence": "Driving Licence",
         "passport": "Passport",
         "electricity": "Electricity Bill",
-        "water": "Water Bill"
+        "water": "Water Bill",
+        "invoice": "Invoice"
     }
     colors = {
         "crbook": "green",
         "licence": "blue",
         "passport": "purple",
         "electricity": "yellow",
-        "water": "blue"
+        "water": "blue",
+        "invoice": "orange"
     }
     placeholder = {
         "crbook": "https://placehold.co/600x400?text=Upload+CR+Book+Image",
         "licence": "https://placehold.co/600x400?text=Upload+Licence+Image",
         "passport": "https://placehold.co/600x400?text=Upload+Passport+Image",
         "electricity": "https://placehold.co/600x400?text=Upload+Electricity%20Bill+Image",
-        "water": "https://placehold.co/600x400?text=Upload+Water%20Bill+Image"
+        "water": "https://placehold.co/600x400?text=Upload+Water%20Bill+Image",
+        "invoice": "https://placehold.co/600x400?text=Upload+Invoice+PDF"
     }
 
     # Detect if image_data contains PDF
@@ -391,7 +387,7 @@ def get_document_display(doc_type, image_data=None, extracted_info=None, padding
         Div(
             H3(f"{titles[doc_type]} Information", cls="text-2xl font-semibold leading-none tracking-tight"),
             P(f"Extracted information from the uploaded document using {ocr_method.capitalize()} OCR.",
-              cls="text-gray-500 text-sm mb-6"),
+             cls="text-gray-500 text-sm mb-6"),
             Div(
                 *[
                     Div(
@@ -434,7 +430,7 @@ def get_document_display(doc_type, image_data=None, extracted_info=None, padding
                     for key, value in (extracted_info or {}).items()
                 ] if extracted_info else [
                     P(f"Upload and process a document to see extracted information for {titles[doc_type]}.",
-                      cls="text-gray-500")
+                     cls="text-gray-500")
                 ],
                 cls="space-y-4"
             ),
@@ -468,7 +464,11 @@ def get_tabs():
                 Div(Lucide("droplet", cls="w-4 h-4 mr-2"), "Water", cls="flex items-center"),
                 value="water",
             ),
-            cls="grid w-full grid-cols-5 bg-gray-100/50 rounded-lg gap-1"
+            TabsTrigger(
+                Div(Lucide("file-text", cls="w-4 h-4 mr-2"), "Invoice", cls="flex items-center"),
+                value="invoice",
+            ),
+            cls="grid w-full grid-cols-6 bg-gray-100/50 rounded-lg gap-1"
         ),
         TabsContent(
             get_upload_card("licence"),
@@ -498,6 +498,12 @@ def get_tabs():
             get_upload_card("water"),
             get_document_display(doc_type="water"),
             value="water",
+            cls="space-y-7 transition-all duration-500 ease-in-out"
+        ),
+        TabsContent(
+            get_upload_card("invoice"),
+            get_document_display(doc_type="invoice"),
+            value="invoice",
             cls="space-y-7 transition-all duration-500 ease-in-out"
         ),
         default_value="electricity",
@@ -581,13 +587,17 @@ async def process_ocr(req: Request, doc_type: str):
         if doc_type in ["electricity", "water"]:
             from app.gemini.utility_bills import process_utility_bill
             result = process_utility_bill(uploaded_images[doc_type], doc_type)
+        
+        elif doc_type == "invoice":
+            from app.gemini.invoice import process_gemini_vehicle_pdf
+            result = process_gemini_vehicle_pdf(uploaded_images[doc_type])
 
         else:
             result = process_gemini_cr_book(uploaded_images[doc_type]) if doc_type == "crbook" else (
                 process_gemini_licence(uploaded_images[doc_type]) if doc_type == "licence" else process_gemini_passport(uploaded_images[doc_type])
             )
              
-        image_data = result['image_data']
+        image_data = result.get('image_data') or result.get('pdf_data')
         print(image_data)
         extracted_info = result['extracted_info']
         
@@ -604,6 +614,8 @@ async def process_ocr(req: Request, doc_type: str):
             extracted_info = { "Error": "Upload valid Passport image" }
         elif doc_type == "crbook" and ("Registration Number" not in extracted_info or extracted_info["Registration Number"] == None):
             extracted_info = { "Error": "Upload valid CR book image" }
+        elif doc_type == "invoice" and ("Chassis No" not in extracted_info or extracted_info["Chassis No"] is None):
+            extracted_info = { "Error": "Upload valid Invoice PDF" }
         
         return Div(
             get_document_display(doc_type, image_data=image_data, extracted_info=extracted_info, padding=False),
@@ -616,7 +628,13 @@ async def process_ocr(req: Request, doc_type: str):
             AlertDescription(str(e)),
             variant="destructive",
             cls="mt-4"
-        ), 500
+        ), 
+
+@app.post("/extract-pdf")
+async def extract_pdf(file: UploadFile = File(...)):
+    result = process_gemini_vehicle_pdf(await file.read())
+    return result
+
 
 @rt('/clear/{doc_type}')
 async def clear(req: Request, doc_type: str):
